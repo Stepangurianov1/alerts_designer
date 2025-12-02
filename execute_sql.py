@@ -37,15 +37,6 @@ def run_query_dwh(query: str) -> pd.DataFrame:
 
 
 
-def remove_at_words(text: str) -> str:
-    if not isinstance(text, str):
-        return text
-    text = re.sub(r"\B@\S+", "", text)
-
-    text = text.rstrip()
-    return text
-
-
 
 def get_messages():
     url = 'https://docs.google.com/spreadsheets/d/161HvbPxfOq39piPh0F7ZRRUK4_gjYrnyfglRHIWpeaA/edit?gid=0#gid=0'
@@ -74,7 +65,6 @@ def get_messages():
 
     df = run_query_dwh(query)
     df = df[df['message'].notna()]
-    df['message'] = df['message'].apply(remove_at_words)
 
     return df[['alert_name', 'message', 'event_id']]
 

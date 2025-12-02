@@ -12,6 +12,14 @@ def strip_html_tags(text: str) -> str:
     text = re.sub(r"\s+%", "%", text)
     return text
 
+def remove_at_words(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    text = re.sub(r"\B@\S+", "", text)
+
+    text = text.rstrip()
+    return text
+
 
 def parse_numeric_params(message: str, context_window: int = 40):
     clean_message = strip_html_tags(message)
@@ -76,7 +84,7 @@ def parse_numeric_params(message: str, context_window: int = 40):
             line_end = len(clean_message)
 
         context = clean_message[line_start:line_end]
-
+        clean_message = remove_at_words(clean_message)
         params.append(
             {
                 "index": i,
@@ -103,7 +111,6 @@ def render_message_with_config(clean_message: str, params: list, config: dict):
     """
     if not params:
         return clean_message
-    new_params = {}
     result_parts = []
     last_pos = 0
 
@@ -166,58 +173,50 @@ def insert_sessions():
 
 def config_dict_to_df(config: dict, params: list, alert_name: str, event_id: int) -> pd.DataFrame:
     rows = []
-
     msk_now = datetime.now(pytz.timezone("Europe/Moscow"))
 
-    for idx, entry in config.items():
-        idx = int(idx)
+    for idx_str, entry in config.items():
+        idx = int(idx_str)
         mode = entry.get("mode")
-        param_context = ""
-        raw_value = ""
-        for p in params:
-            if p["index"] == idx:
-                param_context = p.get("context", "")
-                raw_value = p.get("raw", "")
-                break
 
-        new_value = raw_value  
+        original = next(p for p in params if p["index"] == idx)
+        raw_value = original["raw"]
 
         if mode == "numeric":
-            thr = entry.get("threshold")
-            if thr is not None:
-                new_value = str(thr)
+            new_value = str(entry.get("threshold"))
+            is_changed = float(entry["threshold"]) != float(original["value"])
 
         elif mode in ("in_list", "not_in_list"):
             vals = entry.get("values", [])
             new_value = "(" + ", ".join(vals) + ")"
+            is_changed = len(vals) > 0
 
-        if raw_value and param_context:
+        else:
+            new_value = raw_value
+            is_changed = False
+            
+        context = original["context"]
+        if raw_value and context:
             safe_raw = re.escape(raw_value)
-            param_context = re.sub(safe_raw, new_value, param_context, count=1)
-        row = {
-            "index": idx,
+            context = re.sub(safe_raw, new_value, context, count=1)
+
+        rows.append({
+            "param_index": idx,
             "param_number": idx + 1,
             "mode": mode,
-            "values": None,
-            "operator": None,
-            "threshold": None,
+            "values": entry.get("values"),
+            "operator": entry.get("operator"),
+            "threshold": entry.get("threshold"),
             "alert_name": alert_name,
-            "context": param_context,  
+            "event_id": event_id,
+            "context": context,
             "dttm_msk": msk_now,
-            "event_id": event_id
-        }
+            "is_changed": is_changed,
+            "is_active": True,
+        })
 
-        if mode in ("in_list", "not_in_list"):
-            row["values"] = entry.get("values", [])
+    return pd.DataFrame(rows)
 
-        elif mode == "numeric":
-            row["operator"] = entry.get("operator")
-            row["threshold"] = entry.get("threshold")
-
-        rows.append(row)
-
-    df = pd.DataFrame(rows).set_index("index").sort_index()
-    return df
 
 
 
@@ -326,5 +325,5 @@ def main():
                 index=False          
             )
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
