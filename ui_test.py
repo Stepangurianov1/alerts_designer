@@ -171,7 +171,7 @@ def insert_sessions():
 
 
 
-def config_dict_to_df(config: dict, params: list, alert_name: str, event_id: int) -> pd.DataFrame:
+def config_dict_to_df(config: dict, params: list, alert_name: str, event_id: int, change_id: int) -> pd.DataFrame:
     rows = []
     msk_now = datetime.now(pytz.timezone("Europe/Moscow"))
 
@@ -213,6 +213,7 @@ def config_dict_to_df(config: dict, params: list, alert_name: str, event_id: int
             "dttm_msk": msk_now,
             "is_changed": is_changed,
             "is_active": True,
+            "change_id": change_id,
         })
 
     return pd.DataFrame(rows)
@@ -241,7 +242,7 @@ def main():
         st.text_area("Сообщение", value=clean_message, height=300)
         return
 
-    col_left, col_right = st.columns([2, 1])
+    col_left, col_right = st.columns([3, 2])
 
     operators = [">", "<", ">=", "<=", "==", "!="]
     config: dict[int, dict] = {}
@@ -315,8 +316,15 @@ def main():
             "</div>",
             unsafe_allow_html=True,
         )
+        change_id = int(datetime.now(pytz.timezone("Europe/Moscow")).timestamp() * 1000)
         if st.button("Save results to db"):
-            result = config_dict_to_df(config, params, alert_names[alert_idx], event_id)
+            result = config_dict_to_df(
+                config,
+                params,
+                alert_names[alert_idx],
+                event_id,
+                change_id,  
+            )
             result.to_sql(
                 name="alert_params",
                 con=DWH_ENGINE,

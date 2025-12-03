@@ -1,3 +1,4 @@
+from jinja2 import pass_eval_context
 import pandas as pd
 import streamlit as st
 from sqlalchemy import text
@@ -19,19 +20,20 @@ def load_customized_events() -> pd.DataFrame:
         SELECT
             p.event_id,
             p.alert_name,
+            p.change_id,
             h.message,
             MAX(p.dttm_msk) AS last_change,
             BOOL_OR(COALESCE(p.is_active, TRUE)) AS is_active
         FROM alerts.alert_params p
         JOIN alerts.alerts_history h
             ON h.event_id = p.event_id
-        GROUP BY p.event_id, p.alert_name, h.message
+        GROUP BY p.event_id, p.alert_name, h.message, p.change_id
         ORDER BY last_change DESC;
     """
     return run_query_dwh(query)
 
 
-def load_params_for_event(event_id: int) -> pd.DataFrame:
+def load_params_for_event(event_id: int, change_id: int) -> pd.DataFrame:
     """
     Загружает параметры (config) для конкретного event_id.
     """
@@ -47,6 +49,7 @@ def load_params_for_event(event_id: int) -> pd.DataFrame:
             dttm_msk
         FROM alerts.alert_params
         WHERE event_id = {event_id}
+        AND change_id = {change_id}
         ORDER BY param_index;
     """
     return run_query_dwh(query)
@@ -172,16 +175,17 @@ def manage_custom_alerts_page():
 
     st.caption(f"Найдено сообщений: {len(filtered)}")
 
-    for i, row in filtered.iterrows():
+    for _, row in filtered.iterrows():
         event_id = int(row["event_id"])
         alert_name = row["alert_name"]
         raw_message = row["message"]
         is_active = bool(row["is_active"])
+        change_id = row["change_id"]
 
         with st.expander(alert_name, expanded=False):
 
             # parameters from DB
-            params_df = load_params_for_event(event_id)
+            params_df = load_params_for_event(event_id, change_id)
             if params_df.empty:
                 st.warning("Нет параметров для этого сообщения.")
                 st.text_area("Сообщение", value=raw_message, height=180)
@@ -206,24 +210,32 @@ def manage_custom_alerts_page():
                 )
 
             with col_right:
-                st.markdown("**Настройки:**")
+                col_1, col_2 = st.columns([2, 1])
+                with col_1:
+                    st.markdown("**Настройки:**")
 
-                new_state = st.checkbox(
-                    "Правило активно?",
-                    value=is_active,
-                    key=f"active_{event_id}",
-                )
-                if new_state != is_active:
-                    update_event_is_active(event_id, new_state)
-                    st.success("is_active обновлён")
+                    new_state = st.checkbox(
+                        "Правило активно?",
+                        value=is_active,
+                        key=f"active_{event_id}_{change_id}",
+                    )
+                    if new_state != is_active:
+                        update_event_is_active(event_id, new_state)
+                        st.success("is_active обновлён")
 
-                st.caption(f"Последнее изменение: {row['last_change']}")
-
+                    st.caption(f"Последнее изменение: {row['last_change']}")
+                with col_2:
+                    if st.button('Удалить', key=f"delete_{event_id}_{change_id}"):
+                        delete_query = f"""
+                        DELETE FROM alerts.alert_params
+                        WHERE change_id = {change_id}
+                        """
+                        with DWH_ENGINE.begin() as conn:
+                            conn.execute(text(delete_query))
+                        st.rerun()
 
 def main():
     st.set_page_config(page_title="Custom Alerts", layout="wide")
     manage_custom_alerts_page()
 
 
-# if __name__ == "__main__":
-#     main()
