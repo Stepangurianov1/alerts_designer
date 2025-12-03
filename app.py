@@ -4,18 +4,25 @@ from settings_params import main as settings_main
 
 
 def main():
-    # сетап только здесь
-    st.set_page_config(page_title="Alert Params", layout="wide")
+    st.set_page_config(
+        page_title="Alert Params",
+        layout="wide",
+    )
 
+    # Левая панель — и навигация, и фильтры страниц
     st.sidebar.title("Навигация")
+
     page = st.sidebar.radio(
         "Страница",
         ["Конструктор", "Мои кастомные алерты"],
     )
 
+    st.sidebar.markdown("---")
+
     if page == "Конструктор":
         constructor_main()
     else:
+        st.sidebar.caption("Просмотр и включение/выключение кастомных правил")
         settings_main()
 
 
