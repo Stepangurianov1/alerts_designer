@@ -3,20 +3,20 @@ import pandas as pd
 import psycopg2
 import requests
 from sqlalchemy import create_engine
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.hooks.base_hook import BaseHook
+# from airflow import DAG
+# from airflow.operators.python import PythonOperator
+# from airflow.hooks.base_hook import BaseHook
 from parameters_parsing import parse_numeric_params
 # from telegram_utils import notify_failure
 
 
 # ===================== Airflow Connections =====================
 
-con_csd = BaseHook.get_connection('csd_bi_connection')
-con_aifory = BaseHook.get_connection('aifory_connection')
-con_p2p_prod = BaseHook.get_connection('aifory_prod_connection')
-con_dwh = BaseHook.get_connection('dwh_connection')
-con_tickets = BaseHook.get_connection('ticket_replica')
+# con_csd = BaseHook.get_connection('csd_bi_connection')
+# con_aifory = BaseHook.get_connection('aifory_connection')
+# con_p2p_prod = BaseHook.get_connection('aifory_prod_connection')
+# con_dwh = BaseHook.get_connection('dwh_connection')
+# con_tickets = BaseHook.get_connection('ticket_replica')
 
 
 # ===================== DB Helpers =====================
@@ -24,10 +24,10 @@ con_tickets = BaseHook.get_connection('ticket_replica')
 def _run_query(host_con, dbname: str, query: str) -> pd.DataFrame:
     connection = psycopg2.connect(
         dbname=dbname,
-        user=host_con.login,
-        password=host_con.password,
-        host=host_con.host,
-        port=host_con.port,
+        user=host_con['login'],
+        password=host_con['password'],
+        host=host_con['host'],
+        port=host_con['port'],
     )
     try:
         cursor = connection.cursor()
@@ -39,30 +39,44 @@ def _run_query(host_con, dbname: str, query: str) -> pd.DataFrame:
         cursor.close()
         connection.close()
 
-def run_query_cbs_merchants(query: str) -> pd.DataFrame:
-    return _run_query(con_csd, "cbs_replica", query)
+# def run_query_cbs_merchants(query: str) -> pd.DataFrame:
+#     return _run_query(con_csd, "cbs_replica", query)
 
 def run_query_csd(query: str) -> pd.DataFrame:
+    con_csd = {
+        "host": "138.68.88.175",
+        "port": 5432,
+        "name": "csd_bi",
+        "login": "datalens_utl",
+        "password": "fNL60YHONhaxa1AJ7Onhpq"
+    }
     return _run_query(con_csd, "csd_bi", query)
 
 
-def run_query_ticket_replica(query: str) -> pd.DataFrame:
-    return _run_query(con_tickets, "ticket_replica", query)
+# def run_query_ticket_replica(query: str) -> pd.DataFrame:
+#     return _run_query(con_tickets, "ticket_replica", query)
 
 
-def run_query_p2p(query: str) -> pd.DataFrame:
-    return _run_query(con_aifory, "aifory_p2p_prod", query)
+# def run_query_p2p(query: str) -> pd.DataFrame:
+#     return _run_query(con_aifory, "aifory_p2p_prod", query)
 
 
-def run_query_p2p_prod(query: str) -> pd.DataFrame:
-    return _run_query(con_p2p_prod, "aifory_p2p_prod", query)
+# def run_query_p2p_prod(query: str) -> pd.DataFrame:
+#     return _run_query(con_p2p_prod, "aifory_p2p_prod", query)
 
 
-def run_query_p2p_gateway(query: str) -> pd.DataFrame:
-    return _run_query(con_p2p_prod, "p2p_payout_gateway", query)
+# def run_query_p2p_gateway(query: str) -> pd.DataFrame:
+#     return _run_query(con_p2p_prod, "p2p_payout_gateway", query)
 
 
 def run_query_dwh(query: str) -> pd.DataFrame:
+    con_dwh = {
+        "host": "49.12.21.243",
+        "port": 6432,
+        "name": "postgres",
+        "login": "second_bi_user",
+        "password": "sdsdGVGYJ12"
+    }
     return _run_query(con_dwh, "postgres", query)
 
 
@@ -223,6 +237,7 @@ def send_alert():
         """
         SELECT *
         FROM alerts.alert_sample
+        where id = 54
         """
     )
 
@@ -256,14 +271,14 @@ def send_alert():
 
         if db_name == "cascade":
             df = run_query_csd(query)
-        elif db_name == "p2p":
-            df = run_query_p2p(query)
-        elif db_name == "dwh":
-            df = run_query_dwh(query)
-        elif db_name == "cbs_merchant":
-            df = run_query_cbs_merchants(query)
-        elif db_name == "ticket_replica":
-            df = run_query_ticket_replica(query)
+        # elif db_name == "p2p":
+        #     df = run_query_p2p(query)
+        # elif db_name == "dwh":
+        #     df = run_query_dwh(query)
+        # elif db_name == "cbs_merchant":
+        #     df = run_query_cbs_merchants(query)
+        # elif db_name == "ticket_replica":
+        #     df = run_query_ticket_replica(query)
         else:
             print(f"Неизвестный db_name: {db_name}, пропускаем")
             continue
@@ -396,10 +411,10 @@ def send_alert():
     if not cur_alert_df.empty:
         engine = create_engine(
             "postgresql://{user}:{password}@{host}:{port}/postgres".format(
-                user=con_dwh.login,
-                password=con_dwh.password,
-                host=con_dwh.host,
-                port=con_dwh.port,
+                user="second_bi_user",
+                password="sdsdGVGYJ12",
+                host="49.12.21.243",
+                port=6432
             )
         )
         cur_alert_df.to_sql(
@@ -410,22 +425,24 @@ def send_alert():
             index=False,
         )
 
+if __name__ == '__main__':
+    send_alert()
 
-default_args = {
-    "owner": "smallboy",
-    "retries": 1,
-    "retry_delay": timedelta(seconds=20),
-    "on_failure_callback": notify_failure,
-}
+# default_args = {
+#     "owner": "smallboy",
+#     "retries": 1,
+#     "retry_delay": timedelta(seconds=20),
+#     "on_failure_callback": notify_failure,
+# }
 
-with DAG(
-    dag_id="processing_alert",
-    default_args=default_args,
-    schedule_interval="*/5 * * * *",
-    start_date=datetime(2025, 6, 15),
-    catchup=False,
-) as dag:
-    task_send_alert = PythonOperator(
-        task_id="send_alert",
-        python_callable=send_alert,
-    )
+# with DAG(
+#     dag_id="processing_alert",
+#     default_args=default_args,
+#     schedule_interval="*/5 * * * *",
+#     start_date=datetime(2025, 6, 15),
+#     catchup=False,
+# ) as dag:
+#     task_send_alert = PythonOperator(
+#         task_id="send_alert",
+#         python_callable=send_alert,
+#     )

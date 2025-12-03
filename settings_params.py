@@ -7,7 +7,7 @@ import re
 
 from execute_sql import run_query_dwh            
 from consts import DWH_ENGINE     
-from ui_test import parse_numeric_params, render_message_with_config  
+from constructor import parse_numeric_params, render_message_with_config  
 
 
 
