@@ -1,5 +1,7 @@
 .venv/
 consts.py
+.idea
+.env
 __pycache__/
 *.pyc
 *.pyo

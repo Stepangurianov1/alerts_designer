@@ -1,5 +1,5 @@
 import streamlit as st
-from ui_test import main as constructor_main
+from constructor import main as constructor_main
 from settings_params import main as settings_main
 
 
